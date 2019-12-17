@@ -12,7 +12,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/smola/plangid",
-    packages=setuptools.find_packages(exclude=("tests",)),
+    packages=setuptools.find_packages(exclude=('language-dataset',)),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",
@@ -21,4 +21,5 @@ setuptools.setup(
     python_requires=">=3.6",
     install_requires=["click", "hyperopt", "pandas", "pyyaml", "scikit-learn",],
     tests_require=["pytest"],
+    entry_points={"console_scripts": ["plangid=plangid.cli:cli"],},
 )
