@@ -1,0 +1,17 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pytest = "*"
+
+[packages]
+scikit-learn = "*"
+pandas = "*"
+pyyaml = "*"
+hyperopt = "*"
+click = "*"
+
+[pipenv]
+allow_prereleases = true
