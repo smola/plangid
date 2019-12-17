@@ -20,4 +20,5 @@ setuptools.setup(
     ],
     python_requires=">=3.6",
     install_requires=["click", "hyperopt", "pandas", "pyyaml", "scikit-learn",],
+    tests_require=["pytest"],
 )
