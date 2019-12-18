@@ -1,5 +1,3 @@
-from plangid.dataset import Dataset
-
 from array import array
 from collections import defaultdict
 import numbers

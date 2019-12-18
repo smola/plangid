@@ -1,6 +1,5 @@
 from hyperopt.pyll import scope
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
-import numpy as np
+from hyperopt import fmin, tpe, hp, Trials
 
 from .dataset import Dataset
 from .pipeline import LanguagePipeline
@@ -43,9 +42,6 @@ def train(
 
 
 def main():
-
-    from hyperopt import hp
-
     space = scope.train(
         min_ngram=hp.quniform("min_ngram", 1, 2, 1),
         max_ngram=hp.quniform("max_ngram", 2, 6, 1),
@@ -57,3 +53,4 @@ def main():
 
     trials = Trials()
     best = fmin(train, space=space, algo=tpe.suggest, max_evals=100, trials=trials,)
+    return best, trials

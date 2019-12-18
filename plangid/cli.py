@@ -1,6 +1,5 @@
 import click
 import os.path
-import pandas as pd
 
 from plangid.dataset import Dataset
 from plangid.pipeline import LanguagePipeline
