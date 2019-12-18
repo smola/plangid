@@ -1,6 +1,10 @@
 from .dataset import Dataset
 from .tree import explain_path
+from .text import FastCountVectorizer
 
+import scipy.sparse
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.ensemble import ExtraTreesClassifier
 import pandas as pd
 import numpy as np
 import os.path
@@ -11,7 +15,7 @@ import pickle
 class LanguagePipeline:
     def __init__(
         self,
-        ngram_range=(1, 5),
+        ngram_range=(2, 4),
         min_df=4,
         max_df=0.99,
         n_estimators=200,
@@ -22,24 +26,62 @@ class LanguagePipeline:
         self.max_df = max_df
         self.n_estimators = n_estimators
         self.min_samples_split = min_samples_split
-        self.pipeline = self._create_pipeline()
 
-    def fit(self, dataset):
+        self._content_vectorizer = FastCountVectorizer(
+            ngram_range=self.ngram_range, min_df=self.min_df, max_df=self.max_df,
+        )
+        self._filename_vectorizer = CountVectorizer(
+            input="content",
+            encoding="utf-8",
+            decode_error="replace",
+            analyzer="word",
+            lowercase=False,
+            min_df=4,
+            max_df=1.0,
+            dtype=np.uint32,
+        )
+        self._classifier = ExtraTreesClassifier(
+            n_estimators=self.n_estimators,
+            min_samples_split=self.min_samples_split,
+            max_features="sqrt",
+            bootstrap=True,
+            class_weight="balanced",
+            n_jobs=-1,
+        )
+
+    def fit(self, dataset, y=None):
+        df = dataset
         if isinstance(dataset, Dataset):
             df = dataset.to_df()
-        else:
-            df = dataset
-        self.pipeline.fit(df, df["class_name"])
+        if y is None:
+            y = df["class_name"]
+        X = self._fit_transform(df)
+        self._classifier.fit(X, y)
 
     def predict(self, X):
         if isinstance(X, str):
             sample = Dataset.load_sample(X)
             X = pd.DataFrame(data=[sample])
-            return self.pipeline.predict(X)[0]
-        return self.pipeline.predict(X)
+            return self._predict(X)[0]
+        return self._predict(X)
+
+    def _transform(self, X):
+        X_filename = self._filename_vectorizer.transform(X["filename"])
+        X_content = self._content_vectorizer.transform(X["content"])
+        return scipy.sparse.hstack(blocks=[X_filename, X_content], format="csr")
+
+    def _fit_transform(self, X):
+        X_filename = self._filename_vectorizer.fit_transform(X["filename"])
+        X_content = self._content_vectorizer.fit_transform(X["content"])
+        return scipy.sparse.hstack(blocks=[X_filename, X_content], format="csr")
+
+    def _predict(self, X):
+        X = self._transform(X)
+        return self._classifier.predict(X)
 
     def predict_proba(self, X):
-        return self.pipeline.predict_proba(X)
+        X = self._transform(X)
+        return self._classifier.predict_proba(X)
 
     def save(self, path):
         dir = os.path.dirname(path)
@@ -54,17 +96,15 @@ class LanguagePipeline:
             return pickle.load(f)
 
     def explain(self, file):
-        fe = self.pipeline.named_steps["feature_extraction"]
-        clf = self.pipeline.named_steps["clf"]
+        clf = self._classifier
 
         sample = Dataset.load_sample(file)
         X = pd.DataFrame(data=[sample])
-        sample_feat = fe.transform(X).todense().tolist()[0]
+        sample_feat = self._transform(X).todense().tolist()[0]
 
         rules = {}
         result = []
         for tree in clf.estimators_:
-            s = []
             got_gt = False
             got_lte = False
             result = None
@@ -111,16 +151,13 @@ class LanguagePipeline:
         return "\n".join(result)
 
     def _feature_name(self, feature_idx):
-        fe = self.pipeline.named_steps["feature_extraction"]
-        cv_filename = fe.transformer_list[0][1].named_steps["vectorize"]
-        cv_content = fe.transformer_list[1][1].named_steps["vectorize"]
-        first_len = len(cv_filename.vocabulary_)
+        first_len = len(self._filename_vectorizer.vocabulary_)
         if feature_idx < first_len:
             return "filename '%s'" % self._vocab_idx_to_name(
-                cv_filename.vocabulary_, feature_idx
+                self._filename_vectorizer.vocabulary_, feature_idx
             )
         return "content '%s'" % self._vocab_idx_to_name(
-            cv_content.vocabulary_, feature_idx - first_len
+            self._content_vectorizer.vocabulary_, feature_idx - first_len
         )
 
     def _vocab_idx_to_name(self, vocab, idx):
@@ -130,92 +167,6 @@ class LanguagePipeline:
                     n = n.decode("latin-1")
                 return n
         return None
-
-    def _create_pipeline(self):
-        from sklearn.pipeline import Pipeline
-
-        pipeline = Pipeline(
-            [
-                ("feature_extraction", self._create_feature_extraction_pipeline()),
-                ("clf", self._create_classifier()),
-            ],
-            verbose=True,
-        )
-
-        return pipeline
-
-    def _create_classifier(self):
-        from sklearn.ensemble import ExtraTreesClassifier
-
-        return ExtraTreesClassifier(
-            n_estimators=self.n_estimators,
-            min_samples_split=self.min_samples_split,
-            max_features="sqrt",
-            bootstrap=True,
-            class_weight="balanced",
-            n_jobs=-1,
-        )
-
-    def _create_feature_extraction_pipeline(self):
-        from sklearn.pipeline import FeatureUnion
-
-        return FeatureUnion(
-            transformer_list=[
-                ("filename", self._create_filename_feature_extraction_pipeline()),
-                ("content", self._create_content_feature_extraction_pipeline()),
-            ]
-        )
-
-    def _create_content_feature_extraction_pipeline(self):
-        from .text import FastCountVectorizer
-
-        vectorizer = FastCountVectorizer(
-            ngram_range=self.ngram_range, min_df=self.min_df, max_df=self.max_df,
-        )
-
-        # from sklearn.feature_extraction.text import TfidfTransformer
-
-        # tfidf = TfidfTransformer(sublinear_tf=True, use_idf=False)
-
-        from sklearn.pipeline import Pipeline
-        from .utils import ItemSelector
-
-        return Pipeline(
-            [
-                ("select", ItemSelector("content")),
-                ("vectorize", vectorizer),
-                # ("tfidf", tfidf,),
-            ]
-        )
-
-    def _create_filename_feature_extraction_pipeline(self):
-        from sklearn.feature_extraction.text import CountVectorizer
-
-        vectorizer = CountVectorizer(
-            input="content",
-            encoding="utf-8",
-            decode_error="replace",
-            analyzer="word",
-            lowercase=False,
-            min_df=4,
-            max_df=1.0,
-            dtype=np.uint32,
-        )
-
-        # from sklearn.feature_extraction.text import TfidfTransformer
-
-        # tfidf = TfidfTransformer(sublinear_tf=True, use_idf=False)
-
-        from sklearn.pipeline import Pipeline
-        from .utils import ItemSelector
-
-        return Pipeline(
-            [
-                ("select", ItemSelector("filename")),
-                ("vectorize", vectorizer),
-                # ("tfidf", tfidf,),
-            ]
-        )
 
 
 def _sum_dicts(a, b):
