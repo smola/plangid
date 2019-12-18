@@ -28,14 +28,11 @@ def train(
         min_samples_split=int(min_samples_split),
     )
 
-    feature_extraction = lp.pipeline.named_steps["feature_extraction"]
-    clf = lp.pipeline.named_steps["clf"]
-
-    data = feature_extraction.fit_transform(df)
+    data = lp._transform(df)
 
     from sklearn.model_selection import cross_val_predict
 
-    preds = cross_val_predict(clf, data, df["class_index"], cv=CV_SPLIT)
+    preds = cross_val_predict(lp._classifier, data, df["class_index"], cv=CV_SPLIT)
 
     # TODO: try AUC ROC (ovr, weighted)
     from sklearn.metrics import accuracy_score

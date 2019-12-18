@@ -9,15 +9,12 @@ def main():
     df = dataset.to_df()
 
     lp = LanguagePipeline()
-    feature_extraction = lp.pipeline.named_steps["feature_extraction"]
-    clf = lp.pipeline.named_steps["clf"]
-
-    data = feature_extraction.fit_transform(df)
+    data = lp._fit_transform(df)
 
     from sklearn.model_selection import cross_val_predict
 
     preds_proba = cross_val_predict(
-        clf, data, df["class_index"], method="predict_proba", cv=CV_SPLIT
+        lp._classifier, data, df["class_index"], method="predict_proba", cv=CV_SPLIT
     )
     preds = preds_proba.argmax(axis=1)
 
