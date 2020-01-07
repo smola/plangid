@@ -5,9 +5,9 @@ import pandas as pd
 import yaml
 
 try:
-    from yaml import CDumper as Dumper, CLoader as Loader
+    from yaml import CLoader as Loader
 except ImportError:
-    from yaml import Dumper, Loader
+    from yaml import Loader
 
 MAX_SIZE = 10 * 1024
 
