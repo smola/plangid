@@ -1,10 +1,10 @@
 from .dataset import Dataset
 from .tree import explain_path
-from .text import FastCountVectorizer
 
 import scipy.sparse
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import ExtraTreesClassifier
+from fastcountvectorizer import FastCountVectorizer
 import pandas as pd
 import numpy as np
 import os.path
@@ -28,7 +28,10 @@ class LanguagePipeline:
         self.min_samples_split = min_samples_split
 
         self._content_vectorizer = FastCountVectorizer(
-            ngram_range=self.ngram_range, min_df=self.min_df, max_df=self.max_df,
+            encoding="latin-1",
+            ngram_range=self.ngram_range,
+            min_df=self.min_df,
+            max_df=self.max_df,
         )
         self._filename_vectorizer = CountVectorizer(
             input="content",
