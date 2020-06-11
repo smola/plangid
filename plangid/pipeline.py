@@ -1,12 +1,11 @@
 from .dataset import Dataset
 from .tree import explain_path
-from .text import FastCountVectorizer
+from .tokenizer import tokenize
 
 import scipy.sparse
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import ExtraTreesClassifier
 import pandas as pd
-import numpy as np
 import os.path
 import os
 import pickle
@@ -15,11 +14,11 @@ import pickle
 class LanguagePipeline:
     def __init__(
         self,
-        ngram_range=(2, 4),
-        min_df=4,
+        ngram_range=(1, 3),
+        min_df=3,
         max_df=0.99,
-        n_estimators=200,
-        min_samples_split=4,
+        n_estimators=300,
+        min_samples_split=2,
     ):
         self.ngram_range = ngram_range
         self.min_df = min_df
@@ -27,23 +26,35 @@ class LanguagePipeline:
         self.n_estimators = n_estimators
         self.min_samples_split = min_samples_split
 
-        self._content_vectorizer = FastCountVectorizer(
-            ngram_range=self.ngram_range, min_df=self.min_df, max_df=self.max_df,
-        )
-        self._filename_vectorizer = CountVectorizer(
-            input="content",
-            encoding="utf-8",
-            decode_error="replace",
+        self._content_vectorizer = CountVectorizer(
+            tokenizer=tokenize,
+            decode_error="ignore",
             analyzer="word",
             lowercase=False,
-            min_df=4,
-            max_df=1.0,
-            dtype=np.uint32,
+            ngram_range=self.ngram_range,
+            min_df=self.min_df,
+            max_df=self.max_df,
+            binary=True,
+        )
+        self._filename_vectorizer = CountVectorizer(
+            tokenizer=tokenize,
+            decode_error="ignore",
+            analyzer="word",
+            lowercase=False,
+            ngram_range=(1, 2),
+            min_df=self.min_df,
+            max_df=self.max_df,
+            binary=True,
         )
         self._classifier = ExtraTreesClassifier(
             n_estimators=self.n_estimators,
             min_samples_split=self.min_samples_split,
+            min_samples_leaf=1,
+            min_impurity_decrease=0.0,
+            max_depth=None,
             max_features="sqrt",
+            max_samples=0.3,
+            ccp_alpha=0.002,
             bootstrap=True,
             class_weight="balanced",
             n_jobs=-1,
@@ -56,6 +67,7 @@ class LanguagePipeline:
         if y is None:
             y = df["class_name"]
         X = self._fit_transform(df)
+
         self._classifier.fit(X, y)
 
     def predict(self, X):
