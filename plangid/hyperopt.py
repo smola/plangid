@@ -52,5 +52,11 @@ def main():
     )
 
     trials = Trials()
-    best = fmin(train, space=space, algo=tpe.suggest, max_evals=100, trials=trials,)
+    best = fmin(
+        train,
+        space=space,
+        algo=tpe.suggest,
+        max_evals=100,
+        trials=trials,
+    )
     return best, trials
