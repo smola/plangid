@@ -1,3 +1,6 @@
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import cross_val_predict
+
 from .dataset import Dataset
 from .pipeline import LanguagePipeline
 
@@ -9,16 +12,11 @@ def main():
     df = dataset.to_df()
 
     lp = LanguagePipeline()
-    data = lp._fit_transform(df)
-
-    from sklearn.model_selection import cross_val_predict
 
     preds_proba = cross_val_predict(
-        lp._classifier, data, df["class_index"], method="predict_proba", cv=CV_SPLIT
+        lp, df, df["class_index"], method="predict_proba", cv=CV_SPLIT
     )
     preds = preds_proba.argmax(axis=1)
-
-    from sklearn.metrics import accuracy_score
 
     accuracy = accuracy_score(df["class_index"], preds)
     print("Accuracy: %f" % accuracy)
