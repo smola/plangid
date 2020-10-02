@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "plangid"
+version = "0.1.0"
+description = "A programming language detection library and command line tool."
+authors = ["Santiago M. Mola <santi@mola.io>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/smola/plangid"
+repository = "https://github.com/smola/plangid"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+]
+packages = [
+    { include = "plangid" },
+]
+
+[tool.poetry.scripts]
+plangid = 'plangid.cli:main'
+
+[tool.poetry.dependencies]
+python = ">=3.8"
+click = ">=7.1.2"
+numpy = ">=1.19.2"
+pandas = ">=1.1.2"
+PyYAML = ">=5.3.1"
+scikit-learn = ">=0.23.2"
+
+[tool.poetry.dev-dependencies]
+pytest = ">=6.1.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "plangid"
+]
