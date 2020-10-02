@@ -1,3 +1,4 @@
+import gzip
 import os.path
 import os
 import pickle
@@ -84,13 +85,38 @@ class LanguagePipeline(Pipeline):
         dir = os.path.dirname(path)
         if dir:
             os.makedirs(dir, exist_ok=True)
-        with open(path, "wb") as f:
+        with gzip.open(path, "wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def load(path):
-        with open(path, "rb") as f:
+        with gzip.open(path, "rb") as f:
             return pickle.load(f)
+
+    def __getstate__(self):
+        filename_vocabulary = list(self._filename_vectorizer.vocabulary_.keys())
+        content_vocabulary = list(self._content_vectorizer.vocabulary_.keys())
+        return {
+            "filename_vocabulary": filename_vocabulary,
+            "content_vocabulary": content_vocabulary,
+            "classifier": self._classifier,
+        }
+
+    def __setstate__(self, d):
+        self.__init__()
+        filename_vectorizer = self._new_filename_vectorizer(d["filename_vocabulary"])
+        content_vectorizer = self._new_content_vectorizer(d["content_vocabulary"])
+        feature_union = self.named_steps["features"]
+        feature_union.transformers_ = [
+            ("filename", filename_vectorizer, "filename"),
+            ("content", content_vectorizer, "content"),
+        ]
+        feature_union._feature_names_in = ["filename", "content"]
+        feature_union._columns = ["filename", "content"]
+        feature_union._n_features = 2
+        feature_union.sparse_output_ = True
+        feature_union._remainder = ("remainder", "drop", None)
+        self._classifier = d["classifier"]
 
     def explain(self, file):
         clf = self._classifier
@@ -157,6 +183,8 @@ class LanguagePipeline(Pipeline):
         self.named_steps["features"].named_transformers_["filename"] = v
 
     def _new_filename_vectorizer(self, vocab=None) -> CountVectorizer:
+        if isinstance(vocab, list):
+            vocab = {w: i for i, w in enumerate(vocab)}
         return CountVectorizer(
             tokenizer=tokenize,
             decode_error="ignore",
@@ -178,6 +206,8 @@ class LanguagePipeline(Pipeline):
         self.named_steps["features"].named_transformers_["content"] = v
 
     def _new_content_vectorizer(self, vocab=None) -> CountVectorizer:
+        if isinstance(vocab, list):
+            vocab = {w: i for i, w in enumerate(vocab)}
         return CountVectorizer(
             tokenizer=tokenize,
             decode_error="ignore",
@@ -196,7 +226,8 @@ class LanguagePipeline(Pipeline):
 
     @_classifier.setter
     def _classifier(self, clf: ExtraTreesClassifier) -> None:
-        self.named_steps["classifier"] = clf
+        # XXX: named_steps is a property without setter
+        self.steps[-1] = ("classifier", clf)
 
     def _new_classifier(self) -> ExtraTreesClassifier:
         return ExtraTreesClassifier(
