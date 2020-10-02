@@ -1,99 +1,112 @@
-from .dataset import Dataset
-from .tree import explain_path
-from .tokenizer import tokenize
-
-import scipy.sparse
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.ensemble import ExtraTreesClassifier
-import pandas as pd
 import os.path
 import os
 import pickle
 
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.ensemble import ExtraTreesClassifier
+import pandas as pd
 
-class LanguagePipeline:
-    def __init__(
-        self,
-        ngram_range=(1, 3),
-        min_df=3,
-        max_df=0.99,
-        n_estimators=300,
-        min_samples_split=2,
-    ):
-        self.ngram_range = ngram_range
-        self.min_df = min_df
-        self.max_df = max_df
-        self.n_estimators = n_estimators
-        self.min_samples_split = min_samples_split
+from .dataset import Dataset
+from .tree import explain_path
+from .tokenizer import tokenize
 
-        self._content_vectorizer = CountVectorizer(
-            tokenizer=tokenize,
-            decode_error="ignore",
-            analyzer="word",
-            lowercase=False,
-            ngram_range=self.ngram_range,
-            min_df=self.min_df,
-            max_df=self.max_df,
-            binary=True,
+
+__all__ = ["LanguagePipeline"]
+
+
+class LanguagePipeline(Pipeline):
+    def __init__(self):
+        super(LanguagePipeline, self).__init__(
+            [
+                (
+                    "features",
+                    ColumnTransformer(
+                        transformers=[
+                            (
+                                "filename",
+                                CountVectorizer(
+                                    tokenizer=tokenize,
+                                    decode_error="ignore",
+                                    analyzer="word",
+                                    lowercase=False,
+                                    ngram_range=(1, 2),
+                                    min_df=3,
+                                    max_df=0.99,
+                                    binary=True,
+                                ),
+                                "filename",
+                            ),
+                            (
+                                "content",
+                                CountVectorizer(
+                                    tokenizer=tokenize,
+                                    decode_error="ignore",
+                                    analyzer="word",
+                                    lowercase=False,
+                                    ngram_range=(1, 3),
+                                    min_df=3,
+                                    max_df=0.99,
+                                    binary=True,
+                                ),
+                                "content",
+                            ),
+                        ],
+                    ),
+                ),
+                (
+                    "classifier",
+                    ExtraTreesClassifier(
+                        n_estimators=300,
+                        min_samples_split=2,
+                        min_samples_leaf=1,
+                        min_impurity_decrease=0.0,
+                        max_depth=None,
+                        max_features="sqrt",
+                        max_samples=0.3,
+                        ccp_alpha=0.002,
+                        bootstrap=True,
+                        class_weight="balanced",
+                        n_jobs=-1,
+                    ),
+                ),
+            ]
         )
-        self._filename_vectorizer = CountVectorizer(
-            tokenizer=tokenize,
-            decode_error="ignore",
-            analyzer="word",
-            lowercase=False,
-            ngram_range=(1, 2),
-            min_df=self.min_df,
-            max_df=self.max_df,
-            binary=True,
-        )
-        self._classifier = ExtraTreesClassifier(
-            n_estimators=self.n_estimators,
-            min_samples_split=self.min_samples_split,
-            min_samples_leaf=1,
-            min_impurity_decrease=0.0,
-            max_depth=None,
-            max_features="sqrt",
-            max_samples=0.3,
-            ccp_alpha=0.002,
-            bootstrap=True,
-            class_weight="balanced",
-            n_jobs=-1,
-        )
 
-    def fit(self, dataset, y=None):
-        df = dataset
-        if isinstance(dataset, Dataset):
-            df = dataset.to_df()
-        if y is None:
-            y = df["class_name"]
-        X = self._fit_transform(df)
+    def fit(self, X, y=None):
+        X, y = self._prepare_fit(X, y)
+        return super(LanguagePipeline, self).fit(X, y)
 
-        self._classifier.fit(X, y)
+    def fit_predict(self, X, y=None):
+        X, y = self._prepare_fit(X, y)
+        return super(LanguagePipeline, self).fit(X, y)
 
     def predict(self, X):
+        X = self._prepare_predict(X)
+        return super(LanguagePipeline, self).predict(X)
+
+    def predict_proba(self, X):
+        X = self._prepare_predict(X)
+        return super(LanguagePipeline, self).predict_proba(X)
+
+    def _prepare_fit(self, X, y=None):
+        if isinstance(X, Dataset):
+            X = X.to_df()
+        if y is None:
+            y = X["class_name"]
+        # passing extra columns can make feature selectors fail
+        # if dataframes passed to fit and predict have different
+        # number of columns
+        X = X[["filename", "content"]]
+        return X, y
+
+    def _prepare_predict(self, X, y=None):
         if isinstance(X, str):
             sample = Dataset.load_sample(X)
             X = pd.DataFrame(data=[sample])
-            return self._predict(X)[0]
-        return self._predict(X)
-
-    def _transform(self, X):
-        X_filename = self._filename_vectorizer.transform(X["filename"])
-        X_content = self._content_vectorizer.transform(X["content"])
-        return scipy.sparse.hstack(blocks=[X_filename, X_content], format="csr")
-
-    def _fit_transform(self, X):
-        X_filename = self._filename_vectorizer.fit_transform(X["filename"])
-        X_content = self._content_vectorizer.fit_transform(X["content"])
-        return scipy.sparse.hstack(blocks=[X_filename, X_content], format="csr")
-
-    def _predict(self, X):
-        X = self._transform(X)
-        return self._classifier.predict(X)
-
-    def predict_proba(self, X):
-        X = self._transform(X)
-        return self._classifier.predict_proba(X)
+        X = X[["filename", "content"]]
+        return X
 
     def save(self, path):
         dir = os.path.dirname(path)
@@ -109,10 +122,11 @@ class LanguagePipeline:
 
     def explain(self, file):
         clf = self._classifier
+        features = self.get_feature_names()
 
         sample = Dataset.load_sample(file)
         X = pd.DataFrame(data=[sample])
-        sample_feat = self._transform(X).todense().tolist()[0]
+        sample_feat = self.transform(X).todense().tolist()[0]
 
         rules = {}
         result = []
@@ -139,9 +153,9 @@ class LanguagePipeline:
                     if node[2] < 1:
                         if node[1] == "lte":
                             rule.append("NOT")
-                        rule.append(self._feature_name(node[0]))
+                        rule.append(features[node[0]])
                     else:
-                        rule.append(self._feature_name(node[0]))
+                        rule.append(features[node[0]])
                         rule.append("<=" if node[1] == "lte" else ">")
                         rule.append("%.1f" % node[2])
             rule = " ".join(rule)
@@ -162,23 +176,17 @@ class LanguagePipeline:
 
         return "\n".join(result)
 
-    def _feature_name(self, feature_idx):
-        first_len = len(self._filename_vectorizer.vocabulary_)
-        if feature_idx < first_len:
-            return "filename '%s'" % self._vocab_idx_to_name(
-                self._filename_vectorizer.vocabulary_, feature_idx
-            )
-        return "content '%s'" % self._vocab_idx_to_name(
-            self._content_vectorizer.vocabulary_, feature_idx - first_len
-        )
+    @property
+    def _filename_vectorizer(self) -> CountVectorizer:
+        return self.named_steps["features"].named_transformers_["filename"]
 
-    def _vocab_idx_to_name(self, vocab, idx):
-        for n, i in vocab.items():
-            if i == idx:
-                if isinstance(n, bytes):
-                    n = n.decode("latin-1")
-                return n
-        return None
+    @property
+    def _content_vectorizer(self) -> CountVectorizer:
+        return self.named_steps["features"].named_transformers_["content"]
+
+    @property
+    def _classifier(self) -> ExtraTreesClassifier:
+        return self.named_steps["classifier"]
 
 
 def _sum_dicts(a, b):
