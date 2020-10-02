@@ -9,44 +9,44 @@ jobs:
     name: lint (black)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
           fetch-depth: 1
-      - uses: actions/setup-python@v1
+      - uses: actions/setup-python@v2
         with:
-          python-version: '3.7.x'
+          python-version: '3.8'
           architecture: 'x64'
-      - run: pip install black
-      - run: black --check
+      - run: pip install nox
+      - run: nox -e lint_black
   lint-flake8:
     name: lint (flake8)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
           fetch-depth: 1
-      - uses: actions/setup-python@v1
+      - uses: actions/setup-python@v2
         with:
-          python-version: '3.7.x'
+          python-version: '3.8'
           architecture: 'x64'
-      - run: pip install flake8
-      - run: flake8 plangid
+      - run: pip install nox
+      - run: nox -e lint_flake8
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ '3.6.x', '3.7.x', '3.8.x']
+        python-version: [ '3.6', '3.7', '3.8']
     env:
       LANGUAGE_DATASET_PATH: language-dataset/data
     name: test (Python ${{ matrix.python-version }})
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
           fetch-depth: 1
-      - uses: actions/setup-python@v1
+      - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
           architecture: 'x64'
-      - run: pip install tox
+      - run: pip install nox
       - run: git clone https://github.com/smola/language-dataset
-      - run: tox
+      - run: nox -e test-${{ matrix.python-version }}
