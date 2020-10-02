@@ -6,7 +6,7 @@
 #
 click==7.0                # via -r requirements.in
 joblib==0.14.1            # via scikit-learn
-numpy==1.17.4             # via pandas, scikit-learn, scipy
+numpy==1.17.4             # via -r requirements.in, pandas, scikit-learn, scipy
 pandas==0.25.3            # via -r requirements.in
 python-dateutil==2.8.1    # via pandas
 pytz==2019.3              # via pandas

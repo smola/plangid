@@ -2,11 +2,12 @@ import os.path
 import os
 import pickle
 
+import numpy as np
+import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import ExtraTreesClassifier
-import pandas as pd
 
 from .dataset import Dataset
 from .tree import explain_path
@@ -26,61 +27,32 @@ class LanguagePipeline(Pipeline):
                         transformers=[
                             (
                                 "filename",
-                                CountVectorizer(
-                                    tokenizer=tokenize,
-                                    decode_error="ignore",
-                                    analyzer="word",
-                                    lowercase=False,
-                                    ngram_range=(1, 2),
-                                    min_df=3,
-                                    max_df=0.99,
-                                    binary=True,
-                                ),
+                                self._new_filename_vectorizer(),
                                 "filename",
                             ),
                             (
                                 "content",
-                                CountVectorizer(
-                                    tokenizer=tokenize,
-                                    decode_error="ignore",
-                                    analyzer="word",
-                                    lowercase=False,
-                                    ngram_range=(1, 3),
-                                    min_df=3,
-                                    max_df=0.99,
-                                    binary=True,
-                                ),
+                                self._new_content_vectorizer(),
                                 "content",
                             ),
                         ],
                     ),
                 ),
-                (
-                    "classifier",
-                    ExtraTreesClassifier(
-                        n_estimators=300,
-                        min_samples_split=2,
-                        min_samples_leaf=1,
-                        min_impurity_decrease=0.0,
-                        max_depth=None,
-                        max_features="sqrt",
-                        max_samples=0.3,
-                        ccp_alpha=0.002,
-                        bootstrap=True,
-                        class_weight="balanced",
-                        n_jobs=-1,
-                    ),
-                ),
+                ("classifier", self._new_classifier()),
             ]
         )
 
     def fit(self, X, y=None):
         X, y = self._prepare_fit(X, y)
+        super(LanguagePipeline, self).fit(X, y)
+        self._compact()
         return super(LanguagePipeline, self).fit(X, y)
 
     def fit_predict(self, X, y=None):
         X, y = self._prepare_fit(X, y)
-        return super(LanguagePipeline, self).fit(X, y)
+        super(LanguagePipeline, self).fit(X, y)
+        self._compact()
+        return super(LanguagePipeline, self).fit_predict(X, y)
 
     def predict(self, X):
         X = self._prepare_predict(X)
@@ -180,13 +152,91 @@ class LanguagePipeline(Pipeline):
     def _filename_vectorizer(self) -> CountVectorizer:
         return self.named_steps["features"].named_transformers_["filename"]
 
+    @_filename_vectorizer.setter
+    def _filename_vectorizer(self, v: CountVectorizer) -> None:
+        self.named_steps["features"].named_transformers_["filename"] = v
+
+    def _new_filename_vectorizer(self, vocab=None) -> CountVectorizer:
+        return CountVectorizer(
+            tokenizer=tokenize,
+            decode_error="ignore",
+            analyzer="word",
+            lowercase=False,
+            ngram_range=(1, 2),
+            min_df=3,
+            max_df=0.99,
+            binary=True,
+            vocabulary=vocab,
+        )
+
     @property
     def _content_vectorizer(self) -> CountVectorizer:
         return self.named_steps["features"].named_transformers_["content"]
 
+    @_content_vectorizer.setter
+    def _content_vectorizer(self, v: CountVectorizer) -> None:
+        self.named_steps["features"].named_transformers_["content"] = v
+
+    def _new_content_vectorizer(self, vocab=None) -> CountVectorizer:
+        return CountVectorizer(
+            tokenizer=tokenize,
+            decode_error="ignore",
+            analyzer="word",
+            lowercase=False,
+            ngram_range=(1, 3),
+            min_df=3,
+            max_df=0.99,
+            binary=True,
+            vocabulary=vocab,
+        )
+
     @property
     def _classifier(self) -> ExtraTreesClassifier:
         return self.named_steps["classifier"]
+
+    @_classifier.setter
+    def _classifier(self, clf: ExtraTreesClassifier) -> None:
+        self.named_steps["classifier"] = clf
+
+    def _new_classifier(self) -> ExtraTreesClassifier:
+        return ExtraTreesClassifier(
+            n_estimators=300,
+            min_samples_split=2,
+            min_samples_leaf=1,
+            min_impurity_decrease=0.0,
+            max_depth=None,
+            max_features="sqrt",
+            max_samples=0.3,
+            ccp_alpha=0.002,
+            bootstrap=True,
+            class_weight="balanced",
+            n_jobs=-1,
+        )
+
+    def _compact(self) -> None:
+        clf = self._classifier
+        # non-zero importance feature indices
+        feat_indices = np.argwhere(clf.feature_importances_)
+
+        filename_vocab = self._filename_vectorizer.vocabulary_
+        filename_vocab_size = len(filename_vocab)
+        filename_feat_indices = feat_indices[feat_indices < filename_vocab_size]
+        filename_words = [
+            w for w, i in sorted(filename_vocab.items()) if i in filename_feat_indices
+        ]
+        filename_vocab = {w: i for i, w in enumerate(filename_words)}
+        self._filename_vectorizer = self._new_filename_vectorizer(filename_vocab)
+
+        content_vocab = self._content_vectorizer.vocabulary_
+        content_feat_indices = feat_indices[feat_indices >= filename_vocab_size]
+        content_feat_indices -= filename_vocab_size
+        content_words = [
+            w for w, i in sorted(content_vocab.items()) if i in content_feat_indices
+        ]
+        content_vocab = {w: i for i, w in enumerate(content_words)}
+        self._content_vectorizer = self._new_content_vectorizer(content_vocab)
+
+        self._classifier = self._new_classifier()
 
 
 def _sum_dicts(a, b):
