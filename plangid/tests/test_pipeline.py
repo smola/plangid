@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -35,7 +36,9 @@ def test_predict_proba(fitted_lp: LanguagePipeline, df: pd.DataFrame) -> None:
 
 def test_fit_save_load(tmp_path, fitted_lp, df):
     model_path = tmp_path / "model"
+    df = df.head(n=100)
+    result = fitted_lp.predict(df)
     fitted_lp.save(model_path)
     new_lp = LanguagePipeline.load(model_path)
     assert isinstance(new_lp, LanguagePipeline)
-    assert new_lp.predict(df.head(n=100)) is not None
+    assert np.array_equal(result, new_lp.predict(df))
