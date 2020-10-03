@@ -22,9 +22,12 @@ classifiers = [
 packages = [
     { include = "plangid" },
 ]
+include = [
+    "plangid/model.pickle.gz",
+]
 
 [tool.poetry.scripts]
-plangid = 'plangid.cli:main'
+plangid = 'plangid.cli:cli'
 
 [tool.poetry.dependencies]
 python = ">=3.8"
@@ -33,6 +36,7 @@ numpy = ">=1.19.2"
 pandas = ">=1.1.2"
 PyYAML = ">=5.3.1"
 scikit-learn = ">=0.23.2"
+importlib-resources = "^3.0.0"
 
 [tool.poetry.dev-dependencies]
 pytest = ">=6.1.0"

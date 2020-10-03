@@ -23,4 +23,8 @@ def test(session):
 @nox.session(python="3.8")
 def dist(session):
     session.install("poetry")
+    session.run("poetry", "install")
+    session.run(
+        "python", "-m", "plangid.cli", "train", "--model-path=plangid/model.pickle.gz"
+    )
     session.run("poetry", "build")

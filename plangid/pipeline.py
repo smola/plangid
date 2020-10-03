@@ -1,3 +1,7 @@
+try:
+    import importlib.resources as importlib_resources
+except ImportError:
+    import importlib_resources
 import gzip
 import os.path
 import os
@@ -89,8 +93,12 @@ class LanguagePipeline(Pipeline):
             pickle.dump(self, f)
 
     @staticmethod
-    def load(path):
-        with gzip.open(path, "rb") as f:
+    def load(path=None):
+        if path is None:
+            file = importlib_resources.open_binary("plangid", "model.pickle.gz")
+        else:
+            file = path
+        with gzip.open(file, "rb") as f:
             return pickle.load(f)
 
     def __getstate__(self):

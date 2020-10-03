@@ -1,4 +1,4 @@
-name: plangid-ci
+name: ci
 on:
   push:
     branches:
@@ -36,17 +36,29 @@ jobs:
     strategy:
       matrix:
         python-version: [ '3.6', '3.7', '3.8']
-    env:
-      LANGUAGE_DATASET_PATH: language-dataset/data
     name: test (Python ${{ matrix.python-version }})
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 1
+          submodules: true
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
           architecture: 'x64'
       - run: pip install nox
-      - run: git clone https://github.com/smola/language-dataset
       - run: nox -e test-${{ matrix.python-version }}
+  dist:
+    runs-on: ubuntu-latest
+    name: dist
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          submodules: true
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          architecture: 'x64'
+      - run: pip install nox
+      - run: nox -e dist
