@@ -94,8 +94,8 @@ class LanguagePipeline(Pipeline):
             return pickle.load(f)
 
     def __getstate__(self):
-        filename_vocabulary = list(self._filename_vectorizer.vocabulary_.keys())
-        content_vocabulary = list(self._content_vectorizer.vocabulary_.keys())
+        filename_vocabulary = list(sorted(self._filename_vectorizer.vocabulary_.keys()))
+        content_vocabulary = list(sorted(self._content_vectorizer.vocabulary_.keys()))
         return {
             "filename_vocabulary": filename_vocabulary,
             "content_vocabulary": content_vocabulary,
