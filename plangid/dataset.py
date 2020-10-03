@@ -15,7 +15,9 @@ MAX_SIZE = 10 * 1024
 class Dataset:
     def __init__(self, path=None, min_samples=None):
         if not path:
-            path = os.environ["LANGUAGE_DATASET_PATH"]
+            path = os.environ.get("LANGUAGE_DATASET_PATH")
+            if not path:
+                path = "language-dataset/data"
         self.path = path
         self.min_samples = min_samples
 

@@ -1,0 +1,3 @@
+[submodule "language-dataset"]
+	path = language-dataset
+	url = https://github.com/smola/language-dataset.git
