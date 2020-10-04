@@ -1,7 +1,4 @@
-try:
-    import importlib.resources as importlib_resources
-except ImportError:
-    import importlib_resources
+import importlib.resources
 import gzip
 import os.path
 import os
@@ -95,7 +92,7 @@ class LanguagePipeline(Pipeline):
     @staticmethod
     def load(path=None):
         if path is None:
-            file = importlib_resources.open_binary("plangid", "model.pickle.gz")
+            file = importlib.resources.open_binary("plangid", "model.pickle.gz")
         else:
             file = path
         with gzip.open(file, "rb") as f:
